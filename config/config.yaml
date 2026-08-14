@@ -4,11 +4,15 @@ current_tenders:
   bootstrap_path: "/Tender/AllTendersForVisitor"
   api_path: "/Tender/AllSupplierTendersForVisitorAsync"
   # PublishDateId=5 was captured from a live browser session (unknown meaning yet -
-  # confirm during PoC whether omitting it or using another value returns the full set).
+  # totalCount looked like the full listing though, so left as-is for now).
   default_params:
     PublishDateId: 5
-  # Site UI default is 6; the PoC should confirm the real upper bound accepted by the server.
+  # PoC confirmed (2026-08-14): server echoes back whatever PageSize is
+  # requested but actually caps returned rows at ~24 regardless. Requesting
+  # a generous value here is harmless - collect_all_pages() adapts to the
+  # real length of each response instead of trusting this number.
   page_size_candidates: [6, 50, 100, 500]
+  collect_page_size: 100
 
 request:
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
