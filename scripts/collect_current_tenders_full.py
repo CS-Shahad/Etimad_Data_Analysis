@@ -35,8 +35,9 @@ def main() -> None:
     warm_up(client, cfg, page_number=1)
 
     def fetch_page_fn(page_number: int, size: int) -> dict:
+        # fetch_tenders_page already retries on 429 and raises for other
+        # error statuses before returning.
         resp = fetch_tenders_page(client, cfg, page_number=page_number, page_size=size)
-        resp.raise_for_status()
         return resp.json()
 
     def polite_delay() -> None:

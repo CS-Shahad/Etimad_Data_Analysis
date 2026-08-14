@@ -20,6 +20,13 @@ request:
   min_delay_seconds: 1.5
   max_delay_seconds: 3.0
   timeout_seconds: 20
+  # Observed in production (2026-08-14): the server starts returning 429 after
+  # ~177 consecutive pages (~4250 rows) despite the delay above. These control
+  # how fetch_tenders_page backs off and retries instead of aborting the run.
+  rate_limit_retry:
+    max_retries: 6
+    default_backoff_seconds: 5.0
+    max_backoff_seconds: 90.0
 
 storage:
   sqlite_path: "data/raw/etimad.db"
