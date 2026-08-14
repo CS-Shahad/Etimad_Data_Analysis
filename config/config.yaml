@@ -16,17 +16,21 @@ current_tenders:
 
 request:
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
-  # Minimum delay between requests, in seconds, to stay respectful of a government server.
-  min_delay_seconds: 1.5
-  max_delay_seconds: 3.0
+  # Random delay between requests, in seconds, to stay respectful of a
+  # government server. Widened from 1.5-3.0s (2026-08-14: the server still
+  # returned 429 after ~177 consecutive pages at that rate).
+  min_delay_seconds: 2.0
+  max_delay_seconds: 4.5
   timeout_seconds: 20
-  # Observed in production (2026-08-14): the server starts returning 429 after
-  # ~177 consecutive pages (~4250 rows) despite the delay above. These control
-  # how fetch_tenders_page backs off and retries instead of aborting the run.
+  # How fetch_tenders_page backs off and retries on 429 instead of aborting
+  # the run. Starts at a flat 60s (the server's own rate-limit window is
+  # unknown, so this is a deliberately conservative floor) and grows
+  # exponentially from there if it keeps getting rate-limited.
   rate_limit_retry:
     max_retries: 6
-    default_backoff_seconds: 5.0
-    max_backoff_seconds: 90.0
+    default_backoff_seconds: 60.0
+    max_backoff_seconds: 300.0
 
 storage:
   sqlite_path: "data/raw/etimad.db"
+  checkpoint_path: "data/raw/checkpoint_current_tenders.json"
