@@ -1,0 +1,21 @@
+base_url: "https://tenders.etimad.sa"
+
+current_tenders:
+  bootstrap_path: "/Tender/AllTendersForVisitor"
+  api_path: "/Tender/AllSupplierTendersForVisitorAsync"
+  # PublishDateId=5 was captured from a live browser session (unknown meaning yet -
+  # confirm during PoC whether omitting it or using another value returns the full set).
+  default_params:
+    PublishDateId: 5
+  # Site UI default is 6; the PoC should confirm the real upper bound accepted by the server.
+  page_size_candidates: [6, 50, 100, 500]
+
+request:
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+  # Minimum delay between requests, in seconds, to stay respectful of a government server.
+  min_delay_seconds: 1.5
+  max_delay_seconds: 3.0
+  timeout_seconds: 20
+
+storage:
+  sqlite_path: "data/raw/etimad.db"
