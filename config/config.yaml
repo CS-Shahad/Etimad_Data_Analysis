@@ -34,3 +34,6 @@ request:
 storage:
   sqlite_path: "data/raw/etimad.db"
   checkpoint_path: "data/raw/checkpoint_current_tenders.json"
+  # Committed to the repo (unlike the raw .db/.json above) so a collected
+  # snapshot survives even if the Codespace it was gathered in gets deleted.
+  csv_export_path: "data/processed/current_tenders.csv"

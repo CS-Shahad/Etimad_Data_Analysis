@@ -7,4 +7,5 @@ venv/
 data/raw/*.db
 data/raw/*.json
 data/processed/*.csv
+!data/processed/current_tenders.csv
 data/processed/*.parquet
