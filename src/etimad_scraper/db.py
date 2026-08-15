@@ -99,3 +99,37 @@ def insert_tenders(conn: sqlite3.Connection, records: list[dict], scraped_at: st
     conn.executemany(sql, rows)
     conn.commit()
     return len(rows)
+
+
+# Same tender_id can appear under several scraped_at snapshots (the table is
+# an append-only history), so "ended" needs the *latest* snapshot per tender,
+# not just any row past its deadline.
+_ENDED_TENDERS_SQL = """
+SELECT t.*
+FROM current_tenders t
+INNER JOIN (
+    SELECT tender_id, MAX(scraped_at) AS latest_scraped_at
+    FROM current_tenders
+    GROUP BY tender_id
+) latest
+    ON t.tender_id = latest.tender_id
+   AND t.scraped_at = latest.latest_scraped_at
+WHERE t.last_offer_presentation_date IS NOT NULL
+  AND t.last_offer_presentation_date < ?
+ORDER BY t.last_offer_presentation_date DESC
+"""
+
+
+def get_ended_tenders(conn: sqlite3.Connection, now_iso: str) -> list[dict]:
+    """Latest-snapshot tenders whose submission deadline is before now_iso.
+
+    now_iso is injected rather than read from the wall clock here so this
+    stays testable with a fixed value. Note: Etimad's lastOfferPresentationDate
+    strings carry no timezone (observed as Saudi local time, UTC+3) while
+    scraped_at is UTC - a plain string comparison against a UTC "now" can
+    misclassify tenders that ended within the last ~3 hours as still open.
+    Fine for finding the bulk of already-closed tenders; not exact at the edge.
+    """
+    cur = conn.execute(_ENDED_TENDERS_SQL, (now_iso,))
+    columns = [d[0] for d in cur.description]
+    return [dict(zip(columns, row)) for row in cur.fetchall()]
