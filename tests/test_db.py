@@ -3,7 +3,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from etimad_scraper.db import get_connection, get_ended_tenders, insert_tenders
+from etimad_scraper.db import (
+    get_connection,
+    get_ended_tenders,
+    get_fetched_tender_detail_ids,
+    insert_tender_bids,
+    insert_tender_details,
+    insert_tenders,
+)
 
 # Real record shape captured from AllSupplierTendersForVisitorAsync.
 SAMPLE_RECORD = {
@@ -103,4 +110,76 @@ def test_get_ended_tenders_uses_latest_snapshot_only():
     # latest snapshot's deadline (08-30) is still in the future -> not ended,
     # even though the earlier snapshot's deadline (08-10) had already passed.
     assert ended == []
+    conn.close()
+
+
+def test_insert_tender_details_round_trips():
+    conn = get_connection(":memory:")
+    details = {
+        "tender_value": "0.00",
+        "tender_purpose": "توريد دهانات",
+        "standstill_period": None,
+        "expected_award_date_raw": "التاريخ: 16/04/1448\nالموافق: 28/09/2026",
+        "expected_award_date": "28/09/2026",
+        "work_start_date_raw": None,
+        "work_start_date": None,
+        "offer_submission_location": None,
+        "offer_opening_location": "لا يوجد",
+        "execution_location": "داخل المملكة",
+        "classification": None,
+    }
+
+    insert_tender_details(conn, tender_id=1075680, details=details, fetched_at="2026-08-15T00:00:00Z")
+
+    row = conn.execute(
+        "SELECT tender_value, tender_purpose, expected_award_date, execution_location "
+        "FROM tender_details WHERE tender_id = ?",
+        (1075680,),
+    ).fetchone()
+
+    assert row == ("0.00", "توريد دهانات", "28/09/2026", "داخل المملكة")
+    conn.close()
+
+
+def test_get_fetched_tender_detail_ids_tracks_what_was_already_pulled():
+    conn = get_connection(":memory:")
+    assert get_fetched_tender_detail_ids(conn) == set()
+
+    insert_tender_details(conn, tender_id=1, details={}, fetched_at="2026-08-15T00:00:00Z")
+    insert_tender_details(conn, tender_id=2, details={}, fetched_at="2026-08-15T00:00:00Z")
+
+    assert get_fetched_tender_detail_ids(conn) == {1, 2}
+    conn.close()
+
+
+def test_insert_tender_bids_marks_the_awarded_supplier():
+    conn = get_connection(":memory:")
+    bidders = [
+        {"supplier_name": "مورد أ", "financial_offer": 100.0, "technical_result": "مطابق"},
+        {"supplier_name": "مورد ب", "financial_offer": 90.0, "technical_result": "غير مطابق"},
+    ]
+    awarded = [{"supplier_name": "مورد أ", "financial_offer": 100.0, "award_value": 100.0}]
+
+    inserted = insert_tender_bids(conn, tender_id=1075680, bidders=bidders, awarded=awarded, fetched_at="2026-08-15T00:00:00Z")
+    assert inserted == 2
+
+    rows = conn.execute(
+        "SELECT supplier_name, is_awarded, award_value FROM tender_bids "
+        "WHERE tender_id = ? ORDER BY supplier_name",
+        (1075680,),
+    ).fetchall()
+
+    assert rows == [
+        ("مورد أ", 1, 100.0),
+        ("مورد ب", 0, None),
+    ]
+    conn.close()
+
+
+def test_insert_tender_bids_handles_not_yet_awarded_tender():
+    conn = get_connection(":memory:")
+
+    inserted = insert_tender_bids(conn, tender_id=1, bidders=[], awarded=[], fetched_at="2026-08-15T00:00:00Z")
+
+    assert inserted == 0
     conn.close()

@@ -36,6 +36,38 @@ CREATE INDEX IF NOT EXISTS idx_current_tenders_tender_id
 
 CREATE INDEX IF NOT EXISTS idx_current_tenders_deadline
     ON current_tenders (last_offer_presentation_date);
+
+-- Extra fields only available on the per-tender print report, not the
+-- listing endpoint (see parse_html.parse_basic_info_report). One row per
+-- tender_id: unlike current_tenders this isn't meant to be a snapshot
+-- history, since it's only fetched once a tender has already ended.
+CREATE TABLE IF NOT EXISTS tender_details (
+    tender_id INTEGER PRIMARY KEY,
+    fetched_at TEXT NOT NULL,
+    tender_value TEXT,
+    tender_purpose TEXT,
+    standstill_period TEXT,
+    expected_award_date_raw TEXT,
+    expected_award_date TEXT,
+    work_start_date_raw TEXT,
+    work_start_date TEXT,
+    offer_submission_location TEXT,
+    offer_opening_location TEXT,
+    execution_location TEXT,
+    classification TEXT
+);
+
+-- One row per bidder per tender, from parse_html.parse_awarding_results.
+CREATE TABLE IF NOT EXISTS tender_bids (
+    tender_id INTEGER NOT NULL,
+    supplier_name TEXT NOT NULL,
+    fetched_at TEXT NOT NULL,
+    financial_offer REAL,
+    technical_result TEXT,
+    is_awarded INTEGER NOT NULL DEFAULT 0,
+    award_value REAL,
+    PRIMARY KEY (tender_id, supplier_name)
+);
 """
 
 # Maps our SQLite columns to the raw field names returned by
@@ -133,3 +165,99 @@ def get_ended_tenders(conn: sqlite3.Connection, now_iso: str) -> list[dict]:
     cur = conn.execute(_ENDED_TENDERS_SQL, (now_iso,))
     columns = [d[0] for d in cur.description]
     return [dict(zip(columns, row)) for row in cur.fetchall()]
+
+
+_TENDER_DETAILS_COLUMNS = [
+    "tender_value",
+    "tender_purpose",
+    "standstill_period",
+    "expected_award_date_raw",
+    "expected_award_date",
+    "work_start_date_raw",
+    "work_start_date",
+    "offer_submission_location",
+    "offer_opening_location",
+    "execution_location",
+    "classification",
+]
+
+
+def get_fetched_tender_detail_ids(conn: sqlite3.Connection) -> set[int]:
+    """tender_ids already present in tender_details. Doubles as the resume
+    mechanism for a details/award backfill run: skip anything already in
+    this set instead of tracking a separate page-style checkpoint."""
+    cur = conn.execute("SELECT tender_id FROM tender_details")
+    return {row[0] for row in cur.fetchall()}
+
+
+def insert_tender_details(
+    conn: sqlite3.Connection, tender_id: int, details: dict, fetched_at: str
+) -> None:
+    placeholders = ", ".join(["?"] * (len(_TENDER_DETAILS_COLUMNS) + 2))
+    sql = (
+        f"INSERT OR REPLACE INTO tender_details "
+        f"(tender_id, fetched_at, {', '.join(_TENDER_DETAILS_COLUMNS)}) "
+        f"VALUES ({placeholders})"
+    )
+    row = [tender_id, fetched_at] + [details.get(col) for col in _TENDER_DETAILS_COLUMNS]
+    conn.execute(sql, row)
+    conn.commit()
+
+
+def insert_tender_bids(
+    conn: sqlite3.Connection,
+    tender_id: int,
+    bidders: list[dict],
+    awarded: list[dict],
+    fetched_at: str,
+) -> int:
+    awarded_by_name = {a["supplier_name"]: a for a in awarded}
+    # Bidders and the awarded list both come from the same page and are
+    # expected to overlap by name; anyone in "awarded" but missing from
+    # "bidders" (shouldn't normally happen) is still recorded as its own
+    # bid row so award data is never silently dropped.
+    seen_names = set()
+    rows = []
+
+    for bid in bidders:
+        name = bid["supplier_name"]
+        seen_names.add(name)
+        award = awarded_by_name.get(name)
+        rows.append(
+            (
+                tender_id,
+                name,
+                fetched_at,
+                bid.get("financial_offer"),
+                bid.get("technical_result"),
+                1 if award else 0,
+                award["award_value"] if award else None,
+            )
+        )
+
+    for name, award in awarded_by_name.items():
+        if name in seen_names:
+            continue
+        rows.append(
+            (
+                tender_id,
+                name,
+                fetched_at,
+                award.get("financial_offer"),
+                None,
+                1,
+                award.get("award_value"),
+            )
+        )
+
+    conn.executemany(
+        """
+        INSERT OR REPLACE INTO tender_bids
+            (tender_id, supplier_name, fetched_at, financial_offer,
+             technical_result, is_awarded, award_value)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+    conn.commit()
+    return len(rows)

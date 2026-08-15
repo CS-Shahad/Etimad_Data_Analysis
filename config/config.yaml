@@ -14,6 +14,14 @@ current_tenders:
   page_size_candidates: [6, 50, 100, 500]
   collect_page_size: 100
 
+# Per-tender extras, only fetched for already-ended tenders (see
+# db.get_ended_tenders / scripts/find_ended_tenders.py) since an open
+# tender's award tab is always empty.
+tender_details:
+  details_page_path: "/Tender/DetailsForVisitor"
+  awarding_results_path: "/Tender/GetAwardingResultsForVisitorViewComponenet"
+  basic_info_report_path: "/Tender/OpenTenderDetailsReportForVisitor"
+
 request:
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
   # Random delay between requests, in seconds, to stay respectful of a
