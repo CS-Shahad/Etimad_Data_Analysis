@@ -1,0 +1,39 @@
+﻿tender_id,failed_at,tender_id_string,error
+1066250,2026-08-15T18:33:56.362915+00:00,mvPhYOVizcGqXO7BjrDCaQ==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=mvPhYOVizcGqXO7BjrDCaQ%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+1085878,2026-08-15T23:32:57.033891+00:00,MNx2pAVM4PGl5Jd06igvTw==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=MNx2pAVM4PGl5Jd06igvTw%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000001422,2026-08-15T21:09:45.983727+00:00,yZeJAiHHxxrpWfUa ocSvA==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=yZeJAiHHxxrpWfUa+ocSvA%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000001746,2026-08-15T21:09:12.823657+00:00,PiChH8AliNT6sPgE*@@**wFYAg==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=PiChH8AliNT6sPgE%2A%40%40%2A%2AwFYAg%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000001785,2026-08-15T20:05:54.358640+00:00,172CgKV8dP8FCXZa6fn5iQ==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=172CgKV8dP8FCXZa6fn5iQ%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000001824,2026-08-15T20:05:37.721742+00:00,wWsh7NQtuvQhrEuy2BfN2A==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=wWsh7NQtuvQhrEuy2BfN2A%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000001835,2026-08-15T19:09:40.812278+00:00,0DtHJOjRTw 34I paEqKVg==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=0DtHJOjRTw+34I+paEqKVg%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000001879,2026-08-15T19:11:18.523293+00:00,TGej3f00qaoBwO95hxAtqg==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=TGej3f00qaoBwO95hxAtqg%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000001880,2026-08-15T19:54:39.851479+00:00,A4Uyog8VAuZr68iiJtQcyA==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=A4Uyog8VAuZr68iiJtQcyA%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002099,2026-08-15T18:57:27.531591+00:00,YCo6Lo7g3Nj7csgqrGyuSg==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=YCo6Lo7g3Nj7csgqrGyuSg%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002101,2026-08-15T22:08:18.002463+00:00,oHjtgZvok8tgaQGScOZOEg==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=oHjtgZvok8tgaQGScOZOEg%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002132,2026-08-15T22:32:05.107394+00:00,td8v2q9LH1Y 01S*@@**YkchwA==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=td8v2q9LH1Y+01S%2A%40%40%2A%2AYkchwA%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002220,2026-08-15T18:57:18.661854+00:00,ovQnTuGYBkVEHTznwdoeRA==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=ovQnTuGYBkVEHTznwdoeRA%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002314,2026-08-15T18:40:39.980497+00:00,AiWoj*@@**wElUruvO2kh2ftnQ==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=AiWoj%2A%40%40%2A%2AwElUruvO2kh2ftnQ%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002320,2026-08-15T20:05:20.414672+00:00,7xFTlpP4MxoqsKtcOFkycQ==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=7xFTlpP4MxoqsKtcOFkycQ%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002403,2026-08-15T21:41:06.427124+00:00,PBqtGgY347h8Obi6l9u TQ==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=PBqtGgY347h8Obi6l9u+TQ%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002443,2026-08-15T19:54:44.432561+00:00,9hSrevkxsTZm7HC*@@**tthZ5w==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=9hSrevkxsTZm7HC%2A%40%40%2A%2AtthZ5w%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002470,2026-08-15T21:54:35.135985+00:00,Xg6TRzZeVuytE7Xbsx07mQ==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=Xg6TRzZeVuytE7Xbsx07mQ%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+2000002504,2026-08-15T19:09:21.200403+00:00,6WhR*@@**9*@@**b0rkLWBdlu5*@@**sKQ==,"Client error '400 Bad Request' for url 'https://tenders.etimad.sa/Tender/OpenTenderDetailsReportForVisitor?tenderIdString=6WhR%2A%40%40%2A%2A9%2A%40%40%2A%2Ab0rkLWBdlu5%2A%40%40%2A%2AsKQ%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
