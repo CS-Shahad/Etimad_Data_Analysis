@@ -1,13 +1,14 @@
 """
-يسحب "المعلومات الأساسية الإضافية" و"نتائج الترسية" فقط للمنافسات
-المنتهية (اعتمادًا على get_ended_tenders)، ويخزّنها بجدولي
-tender_details و tender_bids.
+Fetches the extra "basic info" fields and "award results" only for ended
+tenders (via get_ended_tenders), storing them in the tender_details and
+tender_bids tables.
 
-تراكمي تلقائيًا: أي tender_id موجود مسبقًا بجدول tender_details يُتجاهل،
-فتشغيل السكربت مرة ثانية بعد ما تنتهي منافسات جديدة يجيب الفرق فقط -
-بدون الحاجة لملف checkpoint منفصل زي سكربت السحب الأول.
+Incremental by construction: any tender_id already present in
+tender_details is skipped, so rerunning the script after more tenders
+close only fetches the delta - no separate checkpoint file needed like
+the first collection script.
 
-الاستخدام:
+Usage:
     python scripts/fetch_tender_details.py
 """
 
@@ -47,12 +48,12 @@ def main() -> None:
     already_fetched = get_fetched_tender_detail_ids(conn)
     pending = [t for t in ended if t["tender_id"] not in already_fetched]
 
-    print(f"منافسات منتهية: {len(ended)}، تم سحبها مسبقًا: {len(already_fetched)}، متبقي: {len(pending)}")
+    print(f"Ended tenders: {len(ended)}, already fetched: {len(already_fetched)}, pending: {len(pending)}")
     if not pending:
-        print("لا يوجد شي جديد.")
+        print("Nothing new.")
         return
 
-    print("تسخين الجلسة...")
+    print("Warming up session...")
     warm_up(client, cfg, page_number=1)
 
     for i, tender in enumerate(pending, start=1):
@@ -74,12 +75,12 @@ def main() -> None:
 
         print(
             f"  [{i}/{len(pending)}] tender_id={tender_id}: "
-            f"{'ترسية موجودة' if award_data['awarded'] else 'بدون ترسية بعد'} "
-            f"({n_bids} عرض مسجّل)"
+            f"{'awarded' if award_data['awarded'] else 'not yet awarded'} "
+            f"({n_bids} bid(s) recorded)"
         )
 
     conn.close()
-    print(f"انتهى. تم سحب تفاصيل {len(pending)} منافسة جديدة.")
+    print(f"Done. Fetched details for {len(pending)} new tender(s).")
 
 
 if __name__ == "__main__":

@@ -40,8 +40,8 @@ def _get_with_rate_limit_retry(
 
     def on_retry(attempt: int, wait_seconds: float) -> None:
         print(
-            f"    429 على {context_label} (محاولة {attempt}) -> "
-            f"انتظار {wait_seconds:.0f} ثانية"
+            f"    429 on {context_label} (attempt {attempt}) -> "
+            f"waiting {wait_seconds:.0f}s"
         )
 
     return get_with_retry(
@@ -71,7 +71,7 @@ def fetch_tenders_page(
         "Referer": referer,
     }
     return _get_with_rate_limit_retry(
-        client, cfg, f"صفحة {page_number}", url=api_path, params=params, headers=headers
+        client, cfg, f"page {page_number}", url=api_path, params=params, headers=headers
     )
 
 
@@ -91,7 +91,7 @@ def fetch_awarding_results(
     return _get_with_rate_limit_retry(
         client,
         cfg,
-        f"نتائج ترسية {tender_id_string}",
+        f"awarding results {tender_id_string}",
         url=cfg["tender_details"]["awarding_results_path"],
         params={"tenderIdStr": tender_id_string},
         headers=headers,
@@ -107,7 +107,7 @@ def fetch_basic_info_report(
     return _get_with_rate_limit_retry(
         client,
         cfg,
-        f"تقرير أساسي {tender_id_string}",
+        f"basic info report {tender_id_string}",
         url=cfg["tender_details"]["basic_info_report_path"],
         params={"tenderIdString": tender_id_string},
         headers={"Accept": "text/html"},

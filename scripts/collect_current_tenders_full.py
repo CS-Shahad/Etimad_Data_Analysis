@@ -1,18 +1,22 @@
 """
-سحب كامل لكل "المنافسات الحالية" المتاحة عبر AllSupplierTendersForVisitorAsync
-وتخزينها كلقطة زمنية واحدة (scraped_at موحّد) بقاعدة SQLite.
+Full collection of all "current tenders" available via
+AllSupplierTendersForVisitorAsync, stored as one timestamped snapshot
+(a shared scraped_at) in SQLite.
 
-مبني على نتائج الـ PoC والتشغيل الفعلي المؤكدة:
-- جلسة httpx عادية (بدون متصفح) كافية لتجاوز كوكيز حماية F5.
-- السيرفر يحدّ فعليًا عدد الصفوف بكل صفحة (~24) بصرف النظر عن PageSize
-  المطلوب، لذلك التقدّم يعتمد على طول "data" الفعلي، والتوقف يعتمد فقط
-  على استلام صفحة فارغة (وليس على totalCount، لأنه يتغيّر بيانات حيّة).
-- بعد ~177 صفحة يبدأ السيرفر بإرجاع 429 (Rate Limiting)، فيتم التعامل
-  معه بإعادة محاولة + انتظار (60 ثانية فأكثر) بدل تعطّل السكربت بالكامل.
-- إذا تعطّل التشغيل (429 متكرر، انقطاع شبكة، Ctrl+C) يُستأنف السحب من
-  آخر صفحة محفوظة بدل البدء من الصفحة الأولى، عبر ملف checkpoint.
+Based on confirmed PoC and production results:
+- A plain httpx session (no browser) is enough to get past the F5 WAF
+  cookies.
+- The server actually caps rows per page (~24) regardless of the
+  requested PageSize, so progress tracks the real length of "data", and
+  completion is only signaled by an empty page (not totalCount, since
+  that drifts on a live dataset).
+- The server starts returning 429 (rate limiting) after ~177 pages,
+  handled with retry + backoff (60s+) instead of aborting the script.
+- If a run is interrupted (repeated 429s, a network drop, Ctrl+C), it
+  resumes from the last saved page instead of starting over, via a
+  checkpoint file.
 
-الاستخدام:
+Usage:
     python scripts/collect_current_tenders_full.py
 """
 
@@ -43,15 +47,15 @@ def main() -> None:
         scraped_at = checkpoint["scraped_at"]
         start_page = checkpoint["last_completed_page"] + 1
         print(
-            f"وُجد checkpoint سابق: استئناف اللقطة {scraped_at} "
-            f"من الصفحة {start_page} (بدل البدء من جديد)."
+            f"Found existing checkpoint: resuming snapshot {scraped_at} "
+            f"from page {start_page} (instead of starting over)."
         )
     else:
         scraped_at = datetime.now(timezone.utc).isoformat()
         start_page = 1
-        print(f"لا يوجد checkpoint، بدء لقطة جديدة: {scraped_at}")
+        print(f"No checkpoint found, starting a new snapshot: {scraped_at}")
 
-    print("تسخين الجلسة...")
+    print("Warming up session...")
     warm_up(client, cfg, page_number=1)
 
     def fetch_page_fn(page_number: int, size: int) -> dict:
@@ -77,9 +81,9 @@ def main() -> None:
                 "total_count_last_seen": total_count,
             },
         )
-        print(f"  صفحة {page_number}: +{inserted} صف (المجموع المُعلَن={total_count})")
+        print(f"  page {page_number}: +{inserted} rows (reported totalCount={total_count})")
 
-    print("بدء السحب...")
+    print("Starting collection...")
     records, total_count = collect_all_pages(
         fetch_page_fn,
         page_size=page_size,
@@ -94,8 +98,8 @@ def main() -> None:
     clear_checkpoint(checkpoint_path)
     conn.close()
 
-    print(f"انتهى. تم جمع {len(records)} منافسة بهذا التشغيل (آخر totalCount مُعلَن={total_count})")
-    print(f"محفوظة في: {cfg['storage']['sqlite_path']} (scraped_at={scraped_at})")
+    print(f"Done. Collected {len(records)} tenders this run (last reported totalCount={total_count})")
+    print(f"Saved to: {cfg['storage']['sqlite_path']} (scraped_at={scraped_at})")
 
 
 if __name__ == "__main__":

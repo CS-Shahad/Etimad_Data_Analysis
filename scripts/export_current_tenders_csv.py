@@ -1,10 +1,11 @@
 """
-يصدّر كل الصفوف المجمّعة بجدول current_tenders (SQLite) إلى ملف CSV واحد
-داخل data/processed/، وهو المسار الوحيد من بيانات المشروع المُتعمَّد رفعه
-لـ git - عكس etimad.db وملف الـ checkpoint المستثنيين عمدًا (.gitignore)
-لأنهما قابلين لإعادة التوليد بالكامل عبر إعادة تشغيل سكربتات السحب.
+Exports every row collected in current_tenders (SQLite) to a single CSV
+file under data/processed/ - the one project data path deliberately
+committed to git, unlike etimad.db and the checkpoint file (gitignored on
+purpose, since both are fully regenerable by rerunning the collection
+scripts).
 
-الاستخدام:
+Usage:
     python scripts/export_current_tenders_csv.py
     git add data/processed/current_tenders.csv
     git commit -m "..."
@@ -39,7 +40,7 @@ def main() -> None:
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
     snapshots = df["scraped_at"].nunique() if not df.empty else 0
-    print(f"تم تصدير {len(df)} صف ({snapshots} لقطة/لقطات زمنية) إلى {csv_path}")
+    print(f"Exported {len(df)} rows ({snapshots} snapshot(s)) to {csv_path}")
 
 
 if __name__ == "__main__":

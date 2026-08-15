@@ -1,14 +1,14 @@
 """
-يحدد أي المنافسات بجدول current_tenders (SQLite) تجاوزت موعدها النهائي
-(last_offer_presentation_date) اعتمادًا على آخر لقطة (scraped_at) لكل
-منافسة، ويصدّرها لملف CSV منفصل.
+Identifies which tenders in current_tenders (SQLite) are past their
+submission deadline (last_offer_presentation_date), based on the latest
+snapshot (scraped_at) per tender, and exports them to a separate CSV.
 
-هذي هي القائمة اللي راح نستخدمها لاحقًا كمدخل لسحب تبويبي "المعلومات
-الأساسية" و"نتائج الترسية" فقط للمنافسات المنتهية (تحتمل وجود بيانات
-ترسية)، بدل محاولة سحبها لكل المنافسات المفتوحة اللي أكيد ما عندها ترسية
-بعد.
+This is the list we'll use later as input for scraping the "basic info"
+and "award results" tabs only for ended tenders (which may have award
+data), instead of trying to fetch it for every open tender - those
+definitely don't have award data yet.
 
-الاستخدام:
+Usage:
     python scripts/find_ended_tenders.py
 """
 
@@ -31,11 +31,11 @@ def main() -> None:
     ended = get_ended_tenders(conn, now_iso)
     conn.close()
 
-    print(f"عدد المنافسات المنتهية (آخر لقطة لكل منافسة، حتى {now_iso}): {len(ended)}")
+    print(f"Ended tenders (latest snapshot per tender, as of {now_iso}): {len(ended)}")
 
     out_path = Path(cfg["storage"]["ended_tenders_csv_path"])
     if not ended:
-        print("لا يوجد شي يُصدَّر.")
+        print("Nothing to export.")
         return
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,7 +44,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(ended)
 
-    print(f"محفوظة في: {out_path}")
+    print(f"Saved to: {out_path}")
 
 
 if __name__ == "__main__":
