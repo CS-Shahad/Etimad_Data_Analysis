@@ -18,6 +18,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from etimad_scraper.config import load_config
@@ -26,6 +28,7 @@ from etimad_scraper.db import (
     get_ended_tenders,
     get_fetched_tender_detail_ids,
     insert_tender_bids,
+    insert_tender_detail_failure,
     insert_tender_details,
 )
 from etimad_scraper.parse_html import parse_awarding_results, parse_basic_info_report
@@ -56,22 +59,38 @@ def main() -> None:
     print("Warming up session...")
     warm_up(client, cfg, page_number=1)
 
+    failures = 0
     for i, tender in enumerate(pending, start=1):
         tender_id = tender["tender_id"]
         tender_id_string = tender["tender_id_string"]
         fetched_at = datetime.now(timezone.utc).isoformat()
 
-        report_resp = fetch_basic_info_report(client, cfg, tender_id_string)
-        details = parse_basic_info_report(report_resp.text)
-        insert_tender_details(conn, tender_id, details, fetched_at)
-        polite_delay(cfg)
+        try:
+            report_resp = fetch_basic_info_report(client, cfg, tender_id_string)
+            details = parse_basic_info_report(report_resp.text)
+            insert_tender_details(conn, tender_id, details, fetched_at)
+            polite_delay(cfg)
 
-        award_resp = fetch_awarding_results(client, cfg, tender_id_string)
-        award_data = parse_awarding_results(award_resp.text)
-        n_bids = insert_tender_bids(
-            conn, tender_id, award_data["bidders"], award_data["awarded"], fetched_at
-        )
-        polite_delay(cfg)
+            award_resp = fetch_awarding_results(client, cfg, tender_id_string)
+            award_data = parse_awarding_results(award_resp.text)
+            n_bids = insert_tender_bids(
+                conn, tender_id, award_data["bidders"], award_data["awarded"], fetched_at
+            )
+            polite_delay(cfg)
+        except httpx.HTTPStatusError as e:
+            # A handful of tender_id_strings contain characters (seen: *, @)
+            # that make this endpoint 400 outright - not a rate-limit issue
+            # (that's already retried inside fetch_*), a real problem with
+            # this specific tender. Recorded, not fetched_at-stamped, so a
+            # rerun retries it automatically instead of one bad id killing
+            # progress on the other ~5700 tenders.
+            failures += 1
+            insert_tender_detail_failure(
+                conn, tender_id, tender_id_string, str(e), fetched_at
+            )
+            print(f"  [{i}/{len(pending)}] tender_id={tender_id}: FAILED ({e}), skipping")
+            polite_delay(cfg)
+            continue
 
         print(
             f"  [{i}/{len(pending)}] tender_id={tender_id}: "
@@ -80,7 +99,7 @@ def main() -> None:
         )
 
     conn.close()
-    print(f"Done. Fetched details for {len(pending)} new tender(s).")
+    print(f"Done. Fetched details for {len(pending) - failures} tender(s), {failures} failed (will retry next run).")
 
 
 if __name__ == "__main__":

@@ -68,6 +68,19 @@ CREATE TABLE IF NOT EXISTS tender_bids (
     award_value REAL,
     PRIMARY KEY (tender_id, supplier_name)
 );
+
+-- Tenders whose details/award request errored (e.g. a 400 from a
+-- tender_id_string containing characters the report endpoint rejects,
+-- observed 2026-08-15). Not in tender_details, so a rerun retries them
+-- automatically; recorded here just so failures are visible instead of
+-- only appearing in scrollback.
+CREATE TABLE IF NOT EXISTS tender_detail_failures (
+    tender_id INTEGER NOT NULL,
+    failed_at TEXT NOT NULL,
+    tender_id_string TEXT,
+    error TEXT,
+    PRIMARY KEY (tender_id, failed_at)
+);
 """
 
 # Maps our SQLite columns to the raw field names returned by
@@ -261,3 +274,21 @@ def insert_tender_bids(
     )
     conn.commit()
     return len(rows)
+
+
+def insert_tender_detail_failure(
+    conn: sqlite3.Connection,
+    tender_id: int,
+    tender_id_string: str,
+    error: str,
+    failed_at: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO tender_detail_failures
+            (tender_id, failed_at, tender_id_string, error)
+        VALUES (?, ?, ?, ?)
+        """,
+        (tender_id, failed_at, tender_id_string, error),
+    )
+    conn.commit()

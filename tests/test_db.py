@@ -8,6 +8,7 @@ from etimad_scraper.db import (
     get_ended_tenders,
     get_fetched_tender_detail_ids,
     insert_tender_bids,
+    insert_tender_detail_failure,
     insert_tender_details,
     insert_tenders,
 )
@@ -182,4 +183,35 @@ def test_insert_tender_bids_handles_not_yet_awarded_tender():
     inserted = insert_tender_bids(conn, tender_id=1, bidders=[], awarded=[], fetched_at="2026-08-15T00:00:00Z")
 
     assert inserted == 0
+    conn.close()
+
+
+def test_insert_tender_detail_failure_round_trips():
+    conn = get_connection(":memory:")
+
+    insert_tender_detail_failure(
+        conn,
+        tender_id=1094858,
+        tender_id_string="AiWoj*@@**wElUruvO2kh2ftnQ==",
+        error="400 Bad Request",
+        failed_at="2026-08-15T00:00:00Z",
+    )
+
+    row = conn.execute(
+        "SELECT tender_id, tender_id_string, error FROM tender_detail_failures WHERE tender_id = ?",
+        (1094858,),
+    ).fetchone()
+
+    assert row == (1094858, "AiWoj*@@**wElUruvO2kh2ftnQ==", "400 Bad Request")
+    conn.close()
+
+
+def test_insert_tender_detail_failure_does_not_count_as_fetched():
+    conn = get_connection(":memory:")
+
+    insert_tender_detail_failure(
+        conn, tender_id=1, tender_id_string="x", error="400", failed_at="2026-08-15T00:00:00Z"
+    )
+
+    assert get_fetched_tender_detail_ids(conn) == set()
     conn.close()
