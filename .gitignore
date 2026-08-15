@@ -8,4 +8,7 @@ data/raw/*.db
 data/raw/*.json
 data/processed/*.csv
 !data/processed/current_tenders.csv
+!data/processed/tender_details.csv
+!data/processed/tender_bids.csv
+!data/processed/tender_detail_failures.csv
 data/processed/*.parquet

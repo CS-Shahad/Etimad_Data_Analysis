@@ -1,0 +1,69 @@
+name: Fetch Tender Details
+
+# Backfills tender_details/tender_bids (basic info + award results) for
+# ended tenders, a bit at a time. A single run is bounded well under
+# GitHub's 6-hour job hard cap (see max_minutes below) since the full
+# ~5700-tender backlog can't finish in one run; each scheduled run picks
+# up where the last one left off via the committed CSVs (see
+# scripts/rebuild_db_from_csv.py) - no persistent runner state needed.
+#
+# Note: the schedule trigger only fires from whatever this file looks
+# like on the repo's default branch. Use "Run workflow" (workflow_dispatch)
+# to trigger it manually on a feature branch before that's merged.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      max_minutes:
+        description: "Time budget for this run, in minutes"
+        required: false
+        default: "330"
+
+concurrency:
+  group: fetch-tender-details
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-details:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Rebuild local database from committed CSVs
+        run: python scripts/rebuild_db_from_csv.py
+
+      - name: Fetch tender details for ended tenders
+        env:
+          FETCH_DETAILS_MAX_MINUTES: ${{ github.event.inputs.max_minutes || '330' }}
+        run: python scripts/fetch_tender_details.py
+
+      - name: Export results back to CSV
+        if: always()
+        run: python scripts/export_tender_details_csv.py
+
+      - name: Commit and push if changed
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/processed/tender_details.csv data/processed/tender_bids.csv data/processed/tender_detail_failures.csv
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update tender details backfill [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi

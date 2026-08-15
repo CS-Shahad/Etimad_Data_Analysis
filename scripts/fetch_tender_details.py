@@ -12,6 +12,7 @@ Usage:
     python scripts/fetch_tender_details.py
 """
 
+import os
 import random
 import sys
 import time
@@ -41,10 +42,20 @@ def polite_delay(cfg: dict) -> None:
     )
 
 
+def _max_runtime_seconds(cfg: dict) -> float | None:
+    # Env var (set by the GitHub Actions workflow) takes priority over
+    # config.yaml, which is left unset for unbounded local/Codespace runs.
+    env_value = os.environ.get("FETCH_DETAILS_MAX_MINUTES")
+    minutes = env_value if env_value is not None else cfg["tender_details"].get("max_runtime_minutes")
+    return float(minutes) * 60 if minutes else None
+
+
 def main() -> None:
     cfg = load_config()
     client = build_session(cfg)
     conn = get_connection(cfg["storage"]["sqlite_path"])
+    max_runtime_seconds = _max_runtime_seconds(cfg)
+    start_time = time.monotonic()
 
     now_iso = datetime.now(timezone.utc).isoformat()
     ended = get_ended_tenders(conn, now_iso)
@@ -52,6 +63,8 @@ def main() -> None:
     pending = [t for t in ended if t["tender_id"] not in already_fetched]
 
     print(f"Ended tenders: {len(ended)}, already fetched: {len(already_fetched)}, pending: {len(pending)}")
+    if max_runtime_seconds:
+        print(f"Time budget: {max_runtime_seconds / 60:.0f} minutes")
     if not pending:
         print("Nothing new.")
         return
@@ -60,10 +73,16 @@ def main() -> None:
     warm_up(client, cfg, page_number=1)
 
     failures = 0
+    processed = 0
     for i, tender in enumerate(pending, start=1):
+        if max_runtime_seconds and (time.monotonic() - start_time) > max_runtime_seconds:
+            print(f"Time budget reached after {processed} tender(s), stopping cleanly. Remaining {len(pending) - processed} will run next time.")
+            break
+
         tender_id = tender["tender_id"]
         tender_id_string = tender["tender_id_string"]
         fetched_at = datetime.now(timezone.utc).isoformat()
+        processed += 1
 
         try:
             report_resp = fetch_basic_info_report(client, cfg, tender_id_string)
@@ -99,7 +118,7 @@ def main() -> None:
         )
 
     conn.close()
-    print(f"Done. Fetched details for {len(pending) - failures} tender(s), {failures} failed (will retry next run).")
+    print(f"Done. Fetched details for {processed - failures} tender(s), {failures} failed (will retry next run).")
 
 
 if __name__ == "__main__":

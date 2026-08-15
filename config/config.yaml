@@ -21,6 +21,12 @@ tender_details:
   details_page_path: "/Tender/DetailsForVisitor"
   awarding_results_path: "/Tender/GetAwardingResultsForVisitorViewComponenet"
   basic_info_report_path: "/Tender/OpenTenderDetailsReportForVisitor"
+  # Optional wall-clock budget for fetch_tender_details.py, in minutes.
+  # Unset here (no limit) so local/Codespace runs behave as before; the
+  # GitHub Actions workflow overrides this via the FETCH_DETAILS_MAX_MINUTES
+  # env var, since a single job run is hard-capped at 6 hours and the full
+  # ~5700-tender backfill won't finish in one run.
+  max_runtime_minutes: null
 
 request:
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
@@ -48,3 +54,9 @@ storage:
   # Working list, regenerated on demand - not committed (data/processed/*.csv
   # is gitignored except current_tenders.csv specifically).
   ended_tenders_csv_path: "data/processed/ended_tenders.csv"
+  # Committed, like csv_export_path above - lets a fresh GitHub Actions
+  # runner (or a fresh Codespace) reconstruct "what's already been fetched"
+  # without needing the gitignored etimad.db itself.
+  tender_details_csv_path: "data/processed/tender_details.csv"
+  tender_bids_csv_path: "data/processed/tender_bids.csv"
+  tender_detail_failures_csv_path: "data/processed/tender_detail_failures.csv"
