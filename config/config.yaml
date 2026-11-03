@@ -3,10 +3,13 @@ base_url: "https://tenders.etimad.sa"
 current_tenders:
   bootstrap_path: "/Tender/AllTendersForVisitor"
   api_path: "/Tender/AllSupplierTendersForVisitorAsync"
-  # PublishDateId=5 was captured from a live browser session (unknown meaning yet -
-  # totalCount looked like the full listing though, so left as-is for now).
+  # Confirmed 2026-11-03 by inspecting the site's own "PublishDateId"
+  # <select> (advanced search > "تاريخ نشر المنافسة"): 1=any time (no date
+  # restriction), 2=2 days, 3=1 week, 4=1 month, 5=3 months. Every
+  # collection run so far used the default (5), meaning all data collected
+  # to date was bounded to a rolling 3-month window, not a full archive.
   default_params:
-    PublishDateId: 5
+    PublishDateId: 1
   # PoC confirmed (2026-08-14): server echoes back whatever PageSize is
   # requested but actually caps returned rows at ~24 regardless. Requesting
   # a generous value here is harmless - collect_all_pages() adapts to the
