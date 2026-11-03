@@ -1,0 +1,81 @@
+name: Collect Current Tenders
+
+# Collects the full tender listing via AllSupplierTendersForVisitorAsync
+# with PublishDateId=1 ("any time" - confirmed 2026-11-03 this returns the
+# full ~291,000-tender archive, not just a rolling window). At ~24 rows/page
+# that's ~12,100 pages - far more than one run, or one GitHub Actions job
+# (hard-capped at 6 hours), can finish. Each scheduled run resumes the same
+# snapshot from where the last one left off via the committed checkpoint
+# (data/raw/checkpoint_current_tenders.json) and the committed
+# current_tenders.csv - no persistent runner state needed.
+#
+# Note: the schedule trigger only fires from whatever this file looks like
+# on the repo's default branch. Use "Run workflow" (workflow_dispatch) to
+# trigger it manually on a feature branch before that's merged.
+#
+# Shares the "etimad-scraping" concurrency group with
+# fetch-tender-details.yml so the two never hit Etimad's server at the
+# same time, regardless of schedule drift. Offset 3 hours from that
+# workflow's 0/6/12/18 UTC schedule so they normally alternate too.
+
+on:
+  schedule:
+    - cron: "0 3,9,15,21 * * *"
+  workflow_dispatch:
+    inputs:
+      max_minutes:
+        description: "Time budget for this run, in minutes"
+        required: false
+        default: "330"
+
+concurrency:
+  group: etimad-scraping
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  collect-tenders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Rebuild local database from committed CSVs
+        run: python scripts/rebuild_db_from_csv.py
+
+      - name: Collect current tenders
+        env:
+          COLLECT_MAX_MINUTES: ${{ github.event.inputs.max_minutes || '330' }}
+        run: python scripts/collect_current_tenders_full.py
+
+      - name: Export results back to CSV
+        if: always()
+        run: python scripts/export_current_tenders_csv.py
+
+      - name: Commit and push if changed
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/processed/current_tenders.csv
+          if [ -f data/raw/checkpoint_current_tenders.json ]; then
+            git add data/raw/checkpoint_current_tenders.json
+          else
+            git rm --cached --ignore-unmatch data/raw/checkpoint_current_tenders.json
+          fi
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update current tenders collection progress [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi

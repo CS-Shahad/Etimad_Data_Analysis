@@ -12,7 +12,6 @@ Usage:
     python scripts/fetch_tender_details.py
 """
 
-import os
 import random
 import sys
 import time
@@ -33,6 +32,7 @@ from etimad_scraper.db import (
     insert_tender_details,
 )
 from etimad_scraper.parse_html import parse_awarding_results, parse_basic_info_report
+from etimad_scraper.runtime_budget import resolve_max_runtime_seconds
 from etimad_scraper.session import build_session, fetch_awarding_results, fetch_basic_info_report, warm_up
 
 
@@ -42,19 +42,13 @@ def polite_delay(cfg: dict) -> None:
     )
 
 
-def _max_runtime_seconds(cfg: dict) -> float | None:
-    # Env var (set by the GitHub Actions workflow) takes priority over
-    # config.yaml, which is left unset for unbounded local/Codespace runs.
-    env_value = os.environ.get("FETCH_DETAILS_MAX_MINUTES")
-    minutes = env_value if env_value is not None else cfg["tender_details"].get("max_runtime_minutes")
-    return float(minutes) * 60 if minutes else None
-
-
 def main() -> None:
     cfg = load_config()
     client = build_session(cfg)
     conn = get_connection(cfg["storage"]["sqlite_path"])
-    max_runtime_seconds = _max_runtime_seconds(cfg)
+    max_runtime_seconds = resolve_max_runtime_seconds(
+        "FETCH_DETAILS_MAX_MINUTES", cfg["tender_details"].get("max_runtime_minutes")
+    )
     start_time = time.monotonic()
 
     now_iso = datetime.now(timezone.utc).isoformat()

@@ -16,6 +16,12 @@ current_tenders:
   # real length of each response instead of trusting this number.
   page_size_candidates: [6, 50, 100, 500]
   collect_page_size: 100
+  # Optional wall-clock budget for collect_current_tenders_full.py, in
+  # minutes - same pattern as tender_details.max_runtime_minutes below.
+  # With PublishDateId=1 the full archive is ~291,000 tenders (~12,100
+  # pages), far more than one run (or one 6-hour-capped Actions job) can
+  # finish - the checkpoint lets it resume across many runs.
+  max_runtime_minutes: null
 
 # Per-tender extras, only fetched for already-ended tenders (see
 # db.get_ended_tenders / scripts/find_ended_tenders.py) since an open
