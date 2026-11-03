@@ -30,6 +30,12 @@ tender_details:
   details_page_path: "/Tender/DetailsForVisitor"
   awarding_results_path: "/Tender/GetAwardingResultsForVisitorViewComponenet"
   basic_info_report_path: "/Tender/OpenTenderDetailsReportForVisitor"
+  # A tender that has failed this many times (tender_detail_failures) is
+  # excluded from future runs entirely instead of being retried forever.
+  # Confirmed 2026-11-03: ~73 tenders with a tender_id_string format this
+  # endpoint rejects outright had been retried on every run since
+  # mid-August (~295 wasted attempts each) with zero chance of succeeding.
+  max_failure_attempts: 3
   # Optional wall-clock budget for fetch_tender_details.py, in minutes.
   # Unset here (no limit) so local/Codespace runs behave as before; the
   # GitHub Actions workflow overrides this via the FETCH_DETAILS_MAX_MINUTES

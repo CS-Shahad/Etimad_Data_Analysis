@@ -7,6 +7,7 @@ from etimad_scraper.db import (
     get_connection,
     get_ended_tenders,
     get_fetched_tender_detail_ids,
+    get_tender_failure_counts,
     insert_tender_bids,
     insert_tender_detail_failure,
     insert_tender_details,
@@ -214,4 +215,29 @@ def test_insert_tender_detail_failure_does_not_count_as_fetched():
     )
 
     assert get_fetched_tender_detail_ids(conn) == set()
+    conn.close()
+
+
+def test_get_tender_failure_counts_counts_repeated_attempts_per_tender():
+    conn = get_connection(":memory:")
+
+    for day in ("2026-08-15", "2026-08-16", "2026-08-17"):
+        insert_tender_detail_failure(
+            conn, tender_id=1094858, tender_id_string="AiWoj*@@**wElUruvO2kh2ftnQ==",
+            error="400", failed_at=f"{day}T00:00:00Z",
+        )
+    insert_tender_detail_failure(
+        conn, tender_id=2, tender_id_string="y", error="400", failed_at="2026-08-15T00:00:00Z"
+    )
+
+    counts = get_tender_failure_counts(conn)
+
+    assert counts == {1094858: 3, 2: 1}
+    conn.close()
+
+
+def test_get_tender_failure_counts_empty_when_no_failures():
+    conn = get_connection(":memory:")
+
+    assert get_tender_failure_counts(conn) == {}
     conn.close()

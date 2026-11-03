@@ -6,7 +6,12 @@ tender_bids tables.
 Incremental by construction: any tender_id already present in
 tender_details is skipped, so rerunning the script after more tenders
 close only fetches the delta - no separate checkpoint file needed like
-the first collection script.
+the first collection script. Likewise, a tender that has already failed
+max_failure_attempts times (config.yaml, default 3) is excluded from
+"pending" entirely instead of being retried forever - observed in
+production (2026-11-03): ~73 tenders with a tender_id_string format this
+endpoint rejects outright (400) had been retried on every single run
+since mid-August with zero chance of ever succeeding.
 
 Usage:
     python scripts/fetch_tender_details.py
@@ -27,6 +32,7 @@ from etimad_scraper.db import (
     get_connection,
     get_ended_tenders,
     get_fetched_tender_detail_ids,
+    get_tender_failure_counts,
     insert_tender_bids,
     insert_tender_detail_failure,
     insert_tender_details,
@@ -49,14 +55,24 @@ def main() -> None:
     max_runtime_seconds = resolve_max_runtime_seconds(
         "FETCH_DETAILS_MAX_MINUTES", cfg["tender_details"].get("max_runtime_minutes")
     )
+    max_failure_attempts = cfg["tender_details"].get("max_failure_attempts", 3)
     start_time = time.monotonic()
 
     now_iso = datetime.now(timezone.utc).isoformat()
     ended = get_ended_tenders(conn, now_iso)
     already_fetched = get_fetched_tender_detail_ids(conn)
-    pending = [t for t in ended if t["tender_id"] not in already_fetched]
+    failure_counts = get_tender_failure_counts(conn)
+
+    not_fetched = [t for t in ended if t["tender_id"] not in already_fetched]
+    pending = [
+        t for t in not_fetched
+        if failure_counts.get(t["tender_id"], 0) < max_failure_attempts
+    ]
+    gave_up_count = len(not_fetched) - len(pending)
 
     print(f"Ended tenders: {len(ended)}, already fetched: {len(already_fetched)}, pending: {len(pending)}")
+    if gave_up_count:
+        print(f"Permanently skipped ({max_failure_attempts}+ failed attempts): {gave_up_count}")
     if max_runtime_seconds:
         print(f"Time budget: {max_runtime_seconds / 60:.0f} minutes")
     if not pending:
@@ -95,8 +111,8 @@ def main() -> None:
             # that make this endpoint 400 outright - not a rate-limit issue
             # (that's already retried inside fetch_*), a real problem with
             # this specific tender. Recorded, not fetched_at-stamped, so a
-            # rerun retries it automatically instead of one bad id killing
-            # progress on the other ~5700 tenders.
+            # rerun retries it (up to max_failure_attempts) instead of one
+            # bad id silently never being looked at again.
             failures += 1
             insert_tender_detail_failure(
                 conn, tender_id, tender_id_string, str(e), fetched_at

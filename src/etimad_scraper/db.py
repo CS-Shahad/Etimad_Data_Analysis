@@ -292,3 +292,15 @@ def insert_tender_detail_failure(
         (tender_id, failed_at, tender_id_string, error),
     )
     conn.commit()
+
+
+def get_tender_failure_counts(conn: sqlite3.Connection) -> dict:
+    """tender_id -> number of recorded attempts in tender_detail_failures.
+    Lets a caller stop retrying a tender past some threshold instead of
+    reattempting it (and logging yet another failure row) every single run
+    forever, as happened for ~73 tenders with a tender_id_string format
+    this endpoint rejects outright (observed 2026-11-03: ~295 retries
+    each, one per run since mid-August, with zero chance of ever
+    succeeding)."""
+    cur = conn.execute("SELECT tender_id, COUNT(*) FROM tender_detail_failures GROUP BY tender_id")
+    return dict(cur.fetchall())
