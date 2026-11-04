@@ -85,3 +85,74 @@ def test_non_429_error_status_raises_immediately_without_retry():
         get_with_retry(get_fn)
 
     assert len(calls) == 1
+
+
+class FakeTimeout(Exception):
+    pass
+
+
+class FakeUnrelatedError(Exception):
+    pass
+
+
+def test_retries_on_transient_exception_then_succeeds():
+    attempts = [FakeTimeout("read timeout"), FakeTimeout("read timeout")]
+    sleeps = []
+
+    def get_fn():
+        if attempts:
+            raise attempts.pop(0)
+        return FakeResponse(200)
+
+    resp = get_with_retry(
+        get_fn, sleep_fn=lambda s: sleeps.append(s), transient_exceptions=(FakeTimeout,)
+    )
+
+    assert resp.status_code == 200
+    assert len(sleeps) == 2
+
+
+def test_gives_up_after_max_retries_of_transient_exceptions():
+    def get_fn():
+        raise FakeTimeout("read timeout")
+
+    with pytest.raises(RuntimeError, match="Gave up after"):
+        get_with_retry(
+            get_fn,
+            max_retries=3,
+            sleep_fn=lambda s: None,
+            transient_exceptions=(FakeTimeout,),
+        )
+
+
+def test_exception_not_in_transient_exceptions_propagates_immediately():
+    calls = []
+
+    def get_fn():
+        calls.append(1)
+        raise FakeUnrelatedError("not a timeout")
+
+    with pytest.raises(FakeUnrelatedError):
+        get_with_retry(get_fn, transient_exceptions=(FakeTimeout,))
+
+    assert len(calls) == 1
+
+
+def test_on_retry_receives_reason_for_both_429_and_transient_exception():
+    responses = [FakeTimeout("boom"), FakeResponse(429), FakeResponse(200)]
+    reasons = []
+
+    def get_fn():
+        item = responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    get_with_retry(
+        get_fn,
+        sleep_fn=lambda s: None,
+        on_retry=lambda attempt, wait, reason: reasons.append(reason),
+        transient_exceptions=(FakeTimeout,),
+    )
+
+    assert reasons == ["boom", "429"]

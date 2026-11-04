@@ -28,9 +28,9 @@ def warm_up(client: httpx.Client, cfg: dict, page_number: int = 1) -> httpx.Resp
     real browser does before the page's JS fires the AJAX call.
     """
     path = cfg["current_tenders"]["bootstrap_path"]
-    resp = client.get(path, params={"PageNumber": page_number})
-    resp.raise_for_status()
-    return resp
+    return _get_with_rate_limit_retry(
+        client, cfg, "warm-up", url=path, params={"PageNumber": page_number}
+    )
 
 
 def _get_with_rate_limit_retry(
@@ -38,9 +38,9 @@ def _get_with_rate_limit_retry(
 ) -> httpx.Response:
     retry_cfg = cfg["request"].get("rate_limit_retry", {})
 
-    def on_retry(attempt: int, wait_seconds: float) -> None:
+    def on_retry(attempt: int, wait_seconds: float, reason: str) -> None:
         print(
-            f"    429 on {context_label} (attempt {attempt}) -> "
+            f"    retrying {context_label} after {reason} (attempt {attempt}) -> "
             f"waiting {wait_seconds:.0f}s"
         )
 
@@ -50,6 +50,12 @@ def _get_with_rate_limit_retry(
         default_backoff_seconds=retry_cfg.get("default_backoff_seconds", 5.0),
         max_backoff_seconds=retry_cfg.get("max_backoff_seconds", 90.0),
         on_retry=on_retry,
+        # A plain network timeout/dropped connection isn't a 429 response -
+        # it's not a response at all, so it bypasses the status-code check
+        # entirely unless caught here too. Observed in production crashing
+        # every run of a multi-hour collection job on an unhandled
+        # httpx.ReadTimeout (2026-11-03/04).
+        transient_exceptions=(httpx.TransportError,),
     )
 
 
@@ -57,8 +63,9 @@ def fetch_tenders_page(
     client: httpx.Client, cfg: dict, page_number: int, page_size: int
 ) -> httpx.Response:
     """Fetches one page, transparently retrying on 429 (observed in
-    production around page ~177 of a full collection run) instead of
-    letting a temporary rate limit abort a multi-minute run.
+    production around page ~177 of a full collection run) or a dropped
+    connection/read timeout (observed around page 650-700 of a long run)
+    instead of letting either abort a multi-hour collection run.
     """
     api_path = cfg["current_tenders"]["api_path"]
     params = dict(cfg["current_tenders"]["default_params"])
