@@ -2,12 +2,22 @@ name: Collect Current Tenders
 
 # Collects the full tender listing via AllSupplierTendersForVisitorAsync
 # with PublishDateId=1 ("any time" - confirmed 2026-11-03 this returns the
-# full ~291,000-tender archive, not just a rolling window). At ~24 rows/page
-# that's ~12,100 pages - far more than one run, or one GitHub Actions job
-# (hard-capped at 6 hours), can finish. Each scheduled run resumes the same
-# snapshot from where the last one left off via the committed checkpoint
-# (data/raw/checkpoint_current_tenders.json) and the committed
-# current_tenders.csv - no persistent runner state needed.
+# full ~291,000-tender archive, not just a rolling window).
+#
+# Plain offset pagination hard-fails (400) once (pageNumber-1)*PageSize
+# passes ~185,000, regardless of PageSize - a true depth limit (confirmed
+# 2026-11-04), and the server's default order isn't reliably chronological
+# either. Fix: collect once per sort direction in
+# current_tenders.collect_directions (config.yaml) - ASC starts at the
+# archive's true beginning (2019-12-05), DESC starts "now" - each walking
+# until it hits its own depth wall. Since 185,000+185,000 exceeds the
+# ~291,000 total, the two together cover the full archive with overlap to
+# spare. Each direction has its own checkpoint
+# (data/raw/checkpoint_current_tenders_<direction>.json) and its own share
+# of the time budget below, so one run makes progress on both instead of
+# one direction starving the other - and the committed current_tenders.csv
+# is the durable state either way, since GitHub Actions runners are
+# ephemeral.
 #
 # Note: the schedule trigger only fires from whatever this file looks like
 # on the repo's default branch. Use "Run workflow" (workflow_dispatch) to
@@ -24,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       max_minutes:
-        description: "Time budget for this run, in minutes"
+        description: "Time budget for this run, in minutes (split evenly across sort directions)"
         required: false
         default: "330"
 
@@ -68,11 +78,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/processed/current_tenders.csv
-          if [ -f data/raw/checkpoint_current_tenders.json ]; then
-            git add data/raw/checkpoint_current_tenders.json
-          else
-            git rm --cached --ignore-unmatch data/raw/checkpoint_current_tenders.json
-          fi
+          shopt -s nullglob
+          for f in data/raw/checkpoint_current_tenders_*.json; do
+            git add "$f"
+          done
+          # A direction that finished this run deletes its own checkpoint -
+          # drop it from the index too instead of leaving a stale tracked file.
+          for tracked in $(git ls-files 'data/raw/checkpoint_current_tenders_*.json'); do
+            if [ ! -f "$tracked" ]; then
+              git rm --cached --ignore-unmatch "$tracked"
+            fi
+          done
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else

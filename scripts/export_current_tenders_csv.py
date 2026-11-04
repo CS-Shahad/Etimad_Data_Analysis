@@ -1,9 +1,10 @@
 """
 Exports every row collected in current_tenders (SQLite) to a single CSV
 file under data/processed/ - the one project data path deliberately
-committed to git, unlike etimad.db and the checkpoint file (gitignored on
-purpose, since both are fully regenerable by rerunning the collection
-scripts).
+committed to git, unlike etimad.db (gitignored, fully regenerable by
+rerunning the collection scripts). The per-direction checkpoint files
+(data/raw/checkpoint_current_tenders_*.json) are committed too, but
+separately by the GitHub Actions workflow - not exported here.
 
 Usage:
     python scripts/export_current_tenders_csv.py

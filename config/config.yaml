@@ -22,6 +22,22 @@ current_tenders:
   # pages), far more than one run (or one 6-hour-capped Actions job) can
   # finish - the checkpoint lets it resume across many runs.
   max_runtime_minutes: null
+  # Confirmed 2026-11-04: pagination hard-fails (400 Bad Request) once the
+  # computed offset (pageNumber-1)*PageSize passes ~185,000, regardless of
+  # PageSize - it's a true depth limit, not a per-page-number cap (tested
+  # the same offset via two different PageSize/pageNumber combos: both 400).
+  # With no explicit sort, page order isn't strictly chronological either
+  # (an accumulated run's dates were spread evenly across 11 months, not a
+  # clean range), so 185,000 pages deep did not mean "the newest 185,000".
+  #
+  # Found the fix via the site's own "ترتيب العناصر" (sort) UI: it submits
+  # Sort=SubmitionDate&SortDirection=ASC|DESC. Sorted ASC starts at
+  # 2019-12-05 (the archive's true start); DESC starts "now". Collecting
+  # BOTH directions separately (each walking until it hits its own ~185k
+  # depth wall) covers the full ~291,000-tender archive with a safe
+  # overlap in the middle, since 185,000 + 185,000 > the total.
+  sort_field: "SubmitionDate"
+  collect_directions: ["desc", "asc"]
 
 # Per-tender extras, only fetched for already-ended tenders (see
 # db.get_ended_tenders / scripts/find_ended_tenders.py) since an open

@@ -60,16 +60,29 @@ def _get_with_rate_limit_retry(
 
 
 def fetch_tenders_page(
-    client: httpx.Client, cfg: dict, page_number: int, page_size: int
+    client: httpx.Client,
+    cfg: dict,
+    page_number: int,
+    page_size: int,
+    sort_direction: str = None,
 ) -> httpx.Response:
     """Fetches one page, transparently retrying on 429 (observed in
     production around page ~177 of a full collection run) or a dropped
     connection/read timeout (observed around page 650-700 of a long run)
     instead of letting either abort a multi-hour collection run.
+
+    sort_direction ("ASC" or "DESC"), when given, sorts by
+    current_tenders.sort_field instead of the server's own default order -
+    needed to approach the archive from either end, since plain offset
+    pagination hard-fails past ~185,000 regardless of sort (confirmed
+    2026-11-04) and the default order isn't reliably chronological.
     """
     api_path = cfg["current_tenders"]["api_path"]
     params = dict(cfg["current_tenders"]["default_params"])
     params.update({"PageSize": page_size, "pageNumber": page_number})
+    if sort_direction:
+        params["Sort"] = cfg["current_tenders"]["sort_field"]
+        params["SortDirection"] = sort_direction
 
     referer = f"{cfg['base_url']}{cfg['current_tenders']['bootstrap_path']}?PageNumber={page_number}"
     headers = {

@@ -9,7 +9,8 @@ data/raw/*.json
 # Committed on purpose, unlike etimad.db itself: lets a scheduled GitHub
 # Actions run (ephemeral runner, no persistent db) resume mid-pagination
 # across runs within the same snapshot instead of restarting from page 1.
-!data/raw/checkpoint_current_tenders.json
+# One per sort direction (checkpoint_current_tenders_<direction>.json).
+!data/raw/checkpoint_current_tenders_*.json
 data/processed/*.csv
 !data/processed/current_tenders.csv
 !data/processed/tender_details.csv

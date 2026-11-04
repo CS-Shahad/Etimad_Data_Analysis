@@ -31,3 +31,15 @@ def clear_checkpoint(path) -> None:
     p = Path(path)
     if p.exists():
         p.unlink()
+
+
+def checkpoint_path_for_direction(base_path, direction: str) -> str:
+    """data/raw/checkpoint_current_tenders.json + "desc"
+    -> data/raw/checkpoint_current_tenders_desc.json
+
+    Each sort direction paginates independently (its own page-number
+    sequence hitting its own depth limit), so each needs its own
+    checkpoint rather than sharing one.
+    """
+    p = Path(base_path)
+    return str(p.with_name(f"{p.stem}_{direction}{p.suffix}"))
