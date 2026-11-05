@@ -33,13 +33,17 @@ def clear_checkpoint(path) -> None:
         p.unlink()
 
 
-def checkpoint_path_for_direction(base_path, direction: str) -> str:
-    """data/raw/checkpoint_current_tenders.json + "desc"
-    -> data/raw/checkpoint_current_tenders_desc.json
+def checkpoint_path_for_partition(base_path, partition_key: str) -> str:
+    """data/raw/checkpoint_current_tenders.json + "2020"
+    -> data/raw/checkpoint_current_tenders_2020.json
 
-    Each sort direction paginates independently (its own page-number
-    sequence hitting its own depth limit), so each needs its own
-    checkpoint rather than sharing one.
+    Each partition (originally a sort direction; now a year-long date
+    range - see date_partitions.py) paginates independently, so each
+    needs its own checkpoint rather than sharing one. A completed
+    partition's checkpoint is kept (not cleared) with a "status": "done"
+    marker instead, so a future run can skip it outright rather than
+    re-collecting it from page 1 - ambiguous otherwise, since a missing
+    checkpoint file would mean either "never started" or "already done".
     """
     p = Path(base_path)
-    return str(p.with_name(f"{p.stem}_{direction}{p.suffix}"))
+    return str(p.with_name(f"{p.stem}_{partition_key}{p.suffix}"))

@@ -23,21 +23,25 @@ current_tenders:
   # finish - the checkpoint lets it resume across many runs.
   max_runtime_minutes: null
   # Confirmed 2026-11-04: pagination hard-fails (400 Bad Request) once the
-  # computed offset (pageNumber-1)*PageSize passes ~185,000, regardless of
-  # PageSize - it's a true depth limit, not a per-page-number cap (tested
-  # the same offset via two different PageSize/pageNumber combos: both 400).
-  # With no explicit sort, page order isn't strictly chronological either
-  # (an accumulated run's dates were spread evenly across 11 months, not a
-  # clean range), so 185,000 pages deep did not mean "the newest 185,000".
+  # computed offset (pageNumber-1)*PageSize passes ~185,000 for DESC/no-sort,
+  # but only ~4,500 for ASC (evidently a much less efficient query plan in
+  # that direction - no index to match it, going by the evidence: DESC and
+  # no-sort both stay cheap at any depth tested so far, ASC does not).
+  # Tried collecting both sort directions to meet in the middle, but ASC's
+  # wall is too shallow for that to cover the archive.
   #
-  # Found the fix via the site's own "ترتيب العناصر" (sort) UI: it submits
-  # Sort=SubmitionDate&SortDirection=ASC|DESC. Sorted ASC starts at
-  # 2019-12-05 (the archive's true start); DESC starts "now". Collecting
-  # BOTH directions separately (each walking until it hits its own ~185k
-  # depth wall) covers the full ~291,000-tender archive with a safe
-  # overlap in the middle, since 185,000 + 185,000 > the total.
+  # Fix: date-partition the archive instead (date_partitions.py) using the
+  # site's own "آخر موعد لتقديم العروض" (last offer presentation date)
+  # range filter - FromLastOfferPresentationDateString/
+  # ToLastOfferPresentationDateString, DD/MM/YYYY, confirmed 2026-11-05.
+  # One full year (2020) reported totalCount=15,653 - comfortably under
+  # the depth wall - so collecting year by year with cheap DESC sort keeps
+  # every single request's result set small enough to never approach it.
+  # archive_start_year is when 2019-12-05 tenders started showing up
+  # (ASC's observed starting point); end year defaults to the current
+  # year (date_partitions.year_partitions).
   sort_field: "SubmitionDate"
-  collect_directions: ["desc", "asc"]
+  archive_start_year: 2019
 
 # Per-tender extras, only fetched for already-ended tenders (see
 # db.get_ended_tenders / scripts/find_ended_tenders.py) since an open

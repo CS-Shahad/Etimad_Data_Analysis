@@ -65,6 +65,8 @@ def fetch_tenders_page(
     page_number: int,
     page_size: int,
     sort_direction: str = None,
+    from_date: str = None,
+    to_date: str = None,
 ) -> httpx.Response:
     """Fetches one page, transparently retrying on 429 (observed in
     production around page ~177 of a full collection run) or a dropped
@@ -72,10 +74,17 @@ def fetch_tenders_page(
     instead of letting either abort a multi-hour collection run.
 
     sort_direction ("ASC" or "DESC"), when given, sorts by
-    current_tenders.sort_field instead of the server's own default order -
-    needed to approach the archive from either end, since plain offset
-    pagination hard-fails past ~185,000 regardless of sort (confirmed
-    2026-11-04) and the default order isn't reliably chronological.
+    current_tenders.sort_field instead of the server's own default order.
+
+    from_date/to_date (DD/MM/YYYY, confirmed 2026-11-05 via the site's own
+    date-range filter), when given, bound the query to
+    FromLastOfferPresentationDateString/ToLastOfferPresentationDateString.
+    Needed because plain pagination hard-fails past some depth regardless
+    of sort (confirmed 2026-11-04: ~185,000 for DESC/no-sort, only ~4,500
+    for ASC - evidently a much less efficient query plan in that
+    direction) - date-partitioning the archive (see date_partitions.py)
+    keeps every single request's result set small enough to never get
+    near that wall in the first place.
     """
     api_path = cfg["current_tenders"]["api_path"]
     params = dict(cfg["current_tenders"]["default_params"])
@@ -83,6 +92,10 @@ def fetch_tenders_page(
     if sort_direction:
         params["Sort"] = cfg["current_tenders"]["sort_field"]
         params["SortDirection"] = sort_direction
+    if from_date:
+        params["FromLastOfferPresentationDateString"] = from_date
+    if to_date:
+        params["ToLastOfferPresentationDateString"] = to_date
 
     referer = f"{cfg['base_url']}{cfg['current_tenders']['bootstrap_path']}?PageNumber={page_number}"
     headers = {

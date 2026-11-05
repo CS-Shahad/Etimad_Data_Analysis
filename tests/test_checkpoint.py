@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from etimad_scraper.checkpoint import (
-    checkpoint_path_for_direction,
+    checkpoint_path_for_partition,
     clear_checkpoint,
     load_checkpoint,
     save_checkpoint,
@@ -45,15 +45,15 @@ def test_clear_checkpoint_is_a_no_op_when_file_does_not_exist(tmp_path):
     clear_checkpoint(tmp_path / "missing.json")  # must not raise
 
 
-def test_checkpoint_path_for_direction_inserts_suffix_before_extension():
+def test_checkpoint_path_for_partition_inserts_suffix_before_extension():
     assert (
-        checkpoint_path_for_direction("data/raw/checkpoint_current_tenders.json", "desc")
-        == "data/raw/checkpoint_current_tenders_desc.json"
+        checkpoint_path_for_partition("data/raw/checkpoint_current_tenders.json", "2020")
+        == "data/raw/checkpoint_current_tenders_2020.json"
     )
 
 
-def test_checkpoint_path_for_direction_differs_between_directions():
-    asc = checkpoint_path_for_direction("data/raw/checkpoint_current_tenders.json", "asc")
-    desc = checkpoint_path_for_direction("data/raw/checkpoint_current_tenders.json", "desc")
+def test_checkpoint_path_for_partition_differs_between_partitions():
+    y2019 = checkpoint_path_for_partition("data/raw/checkpoint_current_tenders.json", "2019")
+    y2020 = checkpoint_path_for_partition("data/raw/checkpoint_current_tenders.json", "2020")
 
-    assert asc != desc
+    assert y2019 != y2020
