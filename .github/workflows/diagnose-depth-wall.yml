@@ -1,0 +1,38 @@
+name: Diagnose Depth Wall
+
+# One-off diagnostic for the new, much shallower 400 wall that hit every
+# year partition in run 42111306656 (2026-11-05) after just 9-41 pages -
+# far short of the ~1850-page wall previously confirmed for the
+# unfiltered query. Runs scripts/diagnose_depth_wall.py, which only reads
+# from the live site (never touches checkpoints or the committed CSVs),
+# to find out whether this is session-related or an inherent limit of
+# the date-filtered query. Manual trigger only - not meant to run on a
+# schedule.
+#
+# Shares the "etimad-scraping" concurrency group with the two collection
+# workflows so it never probes the server while one of them is mid-run.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: etimad-scraping
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Diagnose depth wall
+        run: python scripts/diagnose_depth_wall.py
