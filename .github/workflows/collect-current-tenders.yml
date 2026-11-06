@@ -19,9 +19,13 @@ name: Collect Current Tenders
 # checkpoint (data/raw/checkpoint_current_tenders_<year>.json) carrying a
 # "status": "done" marker once complete, so a finished year is skipped
 # outright on later runs instead of needing to be re-collected, and any
-# time budget is split only across the partitions still pending. The
-# committed current_tenders.csv is the durable state either way, since
-# GitHub Actions runners are ephemeral.
+# time budget is one deadline shared across the partitions still pending,
+# worked through oldest-first until each is actually done (or hits a real
+# error) rather than split into a fixed slice per partition upfront -
+# confirmed 2026-11-06 that splitting it could cut off a partition making
+# steady progress while a later partition's slice went unused after
+# failing in seconds. The committed current_tenders.csv is the durable
+# state either way, since GitHub Actions runners are ephemeral.
 #
 # Note: the schedule trigger only fires from whatever this file looks like
 # on the repo's default branch. Use "Run workflow" (workflow_dispatch) to
@@ -38,7 +42,7 @@ on:
   workflow_dispatch:
     inputs:
       max_minutes:
-        description: "Time budget for this run, in minutes (split evenly across pending year partitions)"
+        description: "Time budget for this run, in minutes (one deadline shared across pending year partitions, worked through oldest-first)"
         required: false
         default: "330"
 

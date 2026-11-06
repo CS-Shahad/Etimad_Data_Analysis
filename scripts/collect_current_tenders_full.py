@@ -29,8 +29,12 @@ Based on confirmed PoC and production results:
   partition's checkpoint gets a "status": "done" marker instead of being
   cleared, so a future run skips it outright - a missing checkpoint file
   would otherwise be ambiguous between "never started" and "already done".
-  Any wall-clock time budget is split only across partitions not yet
-  marked done, so completed years stop taking a share of it.
+  Any wall-clock time budget is one deadline shared across all partitions
+  not yet marked done, worked through oldest-first - a partition runs
+  until it's actually done (or hits a real error) before the next one
+  starts, instead of each getting a fixed slice upfront that could cut it
+  off early while a later partition's unused slice went to waste
+  (confirmed 2026-11-06, run 42200645756).
 - If a run is interrupted (repeated failures after retrying, a network
   drop, Ctrl+C, a time budget), it resumes from the last saved page per
   partition instead of starting over.
@@ -160,13 +164,25 @@ def main() -> None:
 
     print(f"{len(partitions)} year partition(s) total, {len(pending)} still pending: "
           f"{[p[0] for p in pending]}")
-    per_partition_seconds = max_runtime_seconds / len(pending) if max_runtime_seconds and pending else None
+    # One deadline for the whole run, shared across every pending partition
+    # in order (oldest year first - partitions' own order), instead of
+    # splitting it evenly upfront. Splitting it meant a partition making
+    # steady, uninterrupted progress (e.g. reaching page 479 of 2020) still
+    # got cut off once its slice ran out, even while a later partition in
+    # the same run failed in seconds and left its whole slice unused -
+    # confirmed 2026-11-06 (run 42200645756): 2024 and 2026 failed
+    # instantly, but that spare time never went back to 2020/2021/2022,
+    # which were still progressing when their own slice ran out. A shared
+    # deadline instead gives each partition as much of the run as it
+    # actually needs - it only moves on once a partition is fully done or
+    # hits a real error, and whatever's left (if anything) carries over to
+    # the next partition in line rather than being divided up front.
+    deadline = time.monotonic() + max_runtime_seconds if max_runtime_seconds else None
     if max_runtime_seconds:
-        print(f"Time budget: {max_runtime_seconds / 60:.0f} minutes total, "
-              f"{(per_partition_seconds or 0) / 60:.0f} minutes per pending partition")
+        print(f"Time budget: {max_runtime_seconds / 60:.0f} minutes total, shared across "
+              f"pending partitions in order (not split upfront)")
 
     for key, from_date, to_date in pending:
-        deadline = time.monotonic() + per_partition_seconds if per_partition_seconds else None
         try:
             collect_one_partition(cfg, client, conn, key, from_date, to_date, deadline)
         except httpx.HTTPStatusError as e:
