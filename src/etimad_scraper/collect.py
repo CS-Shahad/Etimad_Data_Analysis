@@ -20,15 +20,21 @@ def collect_all_pages(
     deadline: Optional[float] = None,
     now_fn: Callable[[], float] = time.monotonic,
     stall_multiplier: float = 3.0,
+    empty_page_retries: int = 2,
 ) -> tuple[list, Optional[int], bool, bool]:
     """Pages through fetch_page_fn(page_number, page_size) starting at
     start_page (so an interrupted run can resume mid-way) until a page
-    comes back empty. Does not stop early based on the server-reported
-    totalCount, since that count drifts on a live dataset and a resumed
-    run's local "collected" tally would no longer reflect the true
-    cumulative progress anyway — an empty page is the only signal trusted
-    as "done". totalCount is still returned (the latest value seen) purely
-    for progress reporting.
+    comes back empty - confirmed empty, that is: a lone empty page is
+    retried up to empty_page_retries times (confirmed 2026-11-18: trusting
+    a single empty page outright had let the 2022-2025 partitions each get
+    marked "done" at just 16-90% of their real totalCount, apparently from
+    one transient empty response each rather than true completion) before
+    being accepted as the end. Does not stop early based on the
+    server-reported totalCount, since that count drifts on a live dataset
+    and a resumed run's local "collected" tally would no longer reflect
+    the true cumulative progress anyway — a confirmed-empty page is the
+    only signal trusted as "done". totalCount is still returned (the
+    latest value seen) purely for progress reporting.
 
     Does not assume the server honors the requested page_size either — it
     only trusts the actual length of each page's "data" list, since
@@ -79,8 +85,17 @@ def collect_all_pages(
         total_count = payload.get("totalCount", total_count)
 
         if not data:
-            reached_end = True
-            break
+            for _ in range(empty_page_retries):
+                if delay_fn:
+                    delay_fn()
+                payload = fetch_page_fn(page_number, page_size)
+                data = payload.get("data", [])
+                total_count = payload.get("totalCount", total_count)
+                if data:
+                    break
+            if not data:
+                reached_end = True
+                break
 
         if first_page_len is None:
             first_page_len = len(data)

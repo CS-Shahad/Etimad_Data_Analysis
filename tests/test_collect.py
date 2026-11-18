@@ -10,13 +10,14 @@ def make_record(tender_id: int) -> dict:
     return {"tenderId": tender_id}
 
 
-def test_stops_on_first_empty_page():
+def test_stops_once_an_empty_page_is_confirmed_by_retries():
     # Mirrors the real endpoint: PageSize is requested as 100 but the
-    # server only ever returns up to 24 rows per page.
+    # server only ever returns up to 24 rows per page. Page 3 stays empty
+    # across the default retries too, so it's genuinely the end.
     pages = {
         1: [make_record(i) for i in range(1, 25)],   # 24 rows
         2: [make_record(i) for i in range(25, 49)],  # 24 rows
-        3: [],                                       # done
+        3: [],                                       # confirmed done
     }
     calls = []
 
@@ -29,9 +30,52 @@ def test_stops_on_first_empty_page():
     assert reported_total == 48
     assert len(records) == 48
     assert [r["tenderId"] for r in records] == list(range(1, 49))
-    assert calls == [(1, 100), (2, 100), (3, 100)]
+    # page 3 is fetched 3 times total (the empty_page_retries=2 default)
+    # before being trusted as the real end.
+    assert calls == [(1, 100), (2, 100), (3, 100), (3, 100), (3, 100)]
     assert reached_end is True
     assert stalled is False
+
+
+def test_a_single_transient_empty_page_does_not_end_the_run_early():
+    # Confirmed 2026-11-18: the 2022-2025 date partitions each got marked
+    # "done" at just 16-90% of their real totalCount after a single empty
+    # page - almost certainly one transient hiccup, not true completion.
+    # Page 2's real data only shows up from its second fetch onward,
+    # simulating that one-off glitch; it must not be discarded.
+    page_2_calls = {"n": 0}
+
+    def fake_fetch(page_number, page_size):
+        if page_number == 1:
+            return {"data": [make_record(1)], "totalCount": 3}
+        if page_number == 2:
+            page_2_calls["n"] += 1
+            if page_2_calls["n"] == 1:
+                return {"data": [], "totalCount": 3}  # transient glitch
+            return {"data": [make_record(2)], "totalCount": 3}
+        if page_number == 3:
+            return {"data": [make_record(3)], "totalCount": 3}
+        return {"data": [], "totalCount": 3}  # page 4+: confirmed done
+
+    records, _, reached_end, stalled = collect_all_pages(fake_fetch, page_size=100)
+
+    assert [r["tenderId"] for r in records] == [1, 2, 3]
+    assert reached_end is True
+    assert stalled is False
+    assert page_2_calls["n"] == 2
+
+
+def test_empty_page_retries_is_configurable():
+    calls = []
+
+    def fake_fetch(page_number, page_size):
+        calls.append(page_number)
+        return {"data": [], "totalCount": None}
+
+    collect_all_pages(fake_fetch, page_size=100, empty_page_retries=0)
+
+    # no retries at all -> page 1 fetched exactly once before accepting "done"
+    assert calls == [1]
 
 
 def test_does_not_stop_early_just_because_running_total_reached_stale_total_count():
@@ -60,7 +104,9 @@ def test_start_page_resumes_from_a_checkpoint_instead_of_page_one():
 
     records, _, _, _ = collect_all_pages(fake_fetch, page_size=100, start_page=4)
 
-    assert calls == [4, 5, 6]
+    # page 6 (empty) is retried twice (the default empty_page_retries)
+    # before being trusted as the end.
+    assert calls == [4, 5, 6, 6, 6]
     assert [r["tenderId"] for r in records] == [4, 5]
 
 
@@ -119,9 +165,27 @@ def test_delay_fn_called_between_pages_but_not_after_the_last_one():
         return {"data": data, "totalCount": 3}
 
     delay_calls = []
-    collect_all_pages(fake_fetch, page_size=100, delay_fn=lambda: delay_calls.append(1))
+    # empty_page_retries=0 isolates this from the separate retry-delay
+    # behavior (covered below) - here we only care that a successful page
+    # is followed by a delay, and the empty page that ends the run isn't.
+    collect_all_pages(
+        fake_fetch, page_size=100, delay_fn=lambda: delay_calls.append(1), empty_page_retries=0
+    )
 
     assert len(delay_calls) == 3
+
+
+def test_delay_fn_also_called_before_each_empty_page_retry():
+    def fake_fetch(page_number, page_size):
+        return {"data": [], "totalCount": None}
+
+    delay_calls = []
+    collect_all_pages(
+        fake_fetch, page_size=100, delay_fn=lambda: delay_calls.append(1), empty_page_retries=2
+    )
+
+    # a polite delay before each of the 2 retries, same as any other request
+    assert len(delay_calls) == 2
 
 
 def test_on_page_callback_receives_each_page_before_it_stops():
