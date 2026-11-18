@@ -112,7 +112,7 @@ def collect_one_partition(
         print(f"  [{partition_key}] page {page_number}: +{inserted} rows (reported totalCount={total_count})")
 
     print(f"[{partition_key}] Starting collection ({from_date} - {to_date})...")
-    records, total_count, reached_end = collect_all_pages(
+    records, total_count, reached_end, stalled = collect_all_pages(
         fetch_page_fn,
         page_size=page_size,
         start_page=start_page,
@@ -134,9 +134,21 @@ def collect_one_partition(
         current["total_count_last_seen"] = total_count
         save_checkpoint(checkpoint_path, current)
         print(f"[{partition_key}] Done. Collected {len(records)} tenders this run (last reported totalCount={total_count})")
+    elif stalled:
+        # Pages kept coming back non-empty far past what totalCount implies
+        # was needed (confirmed 2026-11-18 on the 2021 partition: page
+        # 11,451 reached while only 42,242 of ~50,001 tenders were actually
+        # distinct) - stop and flag it clearly instead of burning the whole
+        # run's time budget on what's very likely duplicate data, with no
+        # empty page ever coming back to end the loop on its own.
+        print(
+            f"[{partition_key}] STALLED after collecting {len(records)} tenders this run - "
+            f"page count far exceeds what totalCount={total_count} should need. Needs "
+            f"investigation, not just a rerun - checkpoint left as-is."
+        )
     else:
         print(
-            f"[{partition_key}] Time budget reached (or the depth wall / max_pages safety "
+            f"[{partition_key}] Time budget reached (or the max_pages safety "
             f"cap) after collecting {len(records)} tenders this run. Checkpoint saved - "
             f"rerun to continue (last reported totalCount={total_count})."
         )

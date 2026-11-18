@@ -19,7 +19,8 @@ def collect_all_pages(
     on_page: Optional[Callable[[int, list, Optional[int]], None]] = None,
     deadline: Optional[float] = None,
     now_fn: Callable[[], float] = time.monotonic,
-) -> tuple[list, Optional[int], bool]:
+    stall_multiplier: float = 3.0,
+) -> tuple[list, Optional[int], bool, bool]:
     """Pages through fetch_page_fn(page_number, page_size) starting at
     start_page (so an interrupted run can resume mid-way) until a page
     comes back empty. Does not stop early based on the server-reported
@@ -39,15 +40,35 @@ def collect_all_pages(
     scheduled job bounded well under GitHub's 6-hour cap can exit cleanly
     and resume next run via its checkpoint rather than getting killed.
 
+    stall_multiplier guards against a page number that never runs out of
+    non-empty data to return - confirmed 2026-11-18: the 2021 date
+    partition reached page 11,451 (checkpoint carried across a week of
+    resumed runs) while only 42,242 of its ~50,001 tenders were actually
+    distinct, meaning most of those pages were re-serving data already
+    seen rather than making progress - with no empty page ever coming
+    back to signal "done", every run spent its entire shared time budget
+    here without ever finishing. Once the server has reported a
+    totalCount, expected_pages is estimated from it and the size of the
+    first page actually seen (not the requested page_size, since the
+    server doesn't honor that) - if page_number passes
+    expected_pages * stall_multiplier, the loop stops as stalled rather
+    than continuing indefinitely, even though more (very likely
+    duplicate) data is still coming back.
+
     Returns (records_collected_this_call, latest_total_count_seen,
-    reached_end) - reached_end is only True if the loop actually stopped
-    because of an empty page (true completion), not the deadline or
-    max_pages safety cap, so the caller knows whether it's safe to clear
-    its checkpoint.
+    reached_end, stalled). reached_end is only True if the loop actually
+    stopped because of an empty page (true completion), not the deadline,
+    max_pages safety cap, or a stall, so the caller knows whether it's
+    safe to clear its checkpoint. stalled is only True if the
+    stall_multiplier guard is what stopped the loop, so the caller can
+    flag the partition as needing investigation instead of silently
+    retrying the same trap next run.
     """
     collected: list = []
     total_count: Optional[int] = None
     reached_end = False
+    stalled = False
+    first_page_len: Optional[int] = None
 
     for page_number in range(start_page, start_page + max_pages):
         if deadline is not None and now_fn() >= deadline:
@@ -61,6 +82,15 @@ def collect_all_pages(
             reached_end = True
             break
 
+        if first_page_len is None:
+            first_page_len = len(data)
+
+        if total_count:
+            expected_pages = -(-total_count // first_page_len)  # ceil
+            if page_number > expected_pages * stall_multiplier:
+                stalled = True
+                break
+
         if on_page:
             on_page(page_number, data, total_count)
         collected.extend(data)
@@ -68,4 +98,4 @@ def collect_all_pages(
         if delay_fn:
             delay_fn()
 
-    return collected, total_count, reached_end
+    return collected, total_count, reached_end, stalled

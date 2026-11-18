@@ -85,7 +85,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/processed/current_tenders.csv
+          git add data/processed/current_tenders.csv.gz
           shopt -s nullglob
           for f in data/raw/checkpoint_current_tenders_*.json; do
             git add "$f"

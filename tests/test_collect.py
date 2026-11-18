@@ -24,13 +24,14 @@ def test_stops_on_first_empty_page():
         calls.append((page_number, page_size))
         return {"data": pages.get(page_number, []), "totalCount": 48}
 
-    records, reported_total, reached_end = collect_all_pages(fake_fetch, page_size=100)
+    records, reported_total, reached_end, stalled = collect_all_pages(fake_fetch, page_size=100)
 
     assert reported_total == 48
     assert len(records) == 48
     assert [r["tenderId"] for r in records] == list(range(1, 49))
     assert calls == [(1, 100), (2, 100), (3, 100)]
     assert reached_end is True
+    assert stalled is False
 
 
 def test_does_not_stop_early_just_because_running_total_reached_stale_total_count():
@@ -42,7 +43,7 @@ def test_does_not_stop_early_just_because_running_total_reached_stale_total_coun
             return {"data": [make_record(page_number)], "totalCount": 2}
         return {"data": [], "totalCount": 2}
 
-    records, _, reached_end = collect_all_pages(fake_fetch, page_size=100)
+    records, _, reached_end, _ = collect_all_pages(fake_fetch, page_size=100)
 
     assert len(records) == 3
     assert reached_end is True
@@ -57,7 +58,7 @@ def test_start_page_resumes_from_a_checkpoint_instead_of_page_one():
             return {"data": [make_record(page_number)], "totalCount": 5}
         return {"data": [], "totalCount": 5}
 
-    records, _, _ = collect_all_pages(fake_fetch, page_size=100, start_page=4)
+    records, _, _, _ = collect_all_pages(fake_fetch, page_size=100, start_page=4)
 
     assert calls == [4, 5, 6]
     assert [r["tenderId"] for r in records] == [4, 5]
@@ -66,12 +67,50 @@ def test_start_page_resumes_from_a_checkpoint_instead_of_page_one():
 def test_respects_max_pages_safety_cap_relative_to_start_page():
     def fake_fetch(page_number, page_size):
         # never returns an empty page -> would loop forever without the cap
-        return {"data": [make_record(page_number)], "totalCount": 10_000}
+        # (totalCount is unknown here, so the stall guard never engages -
+        # this is purely the max_pages cap)
+        return {"data": [make_record(page_number)], "totalCount": None}
 
-    records, _, reached_end = collect_all_pages(fake_fetch, page_size=100, start_page=10, max_pages=5)
+    records, _, reached_end, stalled = collect_all_pages(fake_fetch, page_size=100, start_page=10, max_pages=5)
 
     assert [r["tenderId"] for r in records] == [10, 11, 12, 13, 14]
     assert reached_end is False
+    assert stalled is False
+
+
+def test_stalls_once_pages_far_exceed_what_total_count_implies():
+    # Mirrors the 2021 partition (confirmed 2026-11-18): totalCount settles
+    # at 100, each page returns 10 rows (so ~10 pages should finish it),
+    # but the server keeps returning non-empty data indefinitely - no
+    # empty page ever comes back to end the loop on its own.
+    def fake_fetch(page_number, page_size):
+        return {"data": [make_record(page_number)] * 10, "totalCount": 100}
+
+    records, total_count, reached_end, stalled = collect_all_pages(
+        fake_fetch, page_size=100, max_pages=10_000
+    )
+
+    assert reached_end is False
+    assert stalled is True
+    assert total_count == 100
+    # stopped after page 30 (expected_pages(10) * stall_multiplier(3)),
+    # not after thousands of pages - 10 rows/page -> 300 records
+    assert len(records) == 300
+
+
+def test_does_not_stall_on_legitimate_progress_within_the_multiplier():
+    # totalCount implies ~10 pages; finishing in 12 (within the 3x margin)
+    # must not be flagged as stalled.
+    def fake_fetch(page_number, page_size):
+        if page_number <= 12:
+            return {"data": [make_record(page_number)] * 10, "totalCount": 100}
+        return {"data": [], "totalCount": 100}
+
+    records, _, reached_end, stalled = collect_all_pages(fake_fetch, page_size=100)
+
+    assert reached_end is True
+    assert stalled is False
+    assert len(records) == 120
 
 
 def test_delay_fn_called_between_pages_but_not_after_the_last_one():
@@ -107,7 +146,7 @@ def test_stops_cleanly_once_deadline_reached_without_fetching_another_page():
     # the deadline, every call after is "past" it.
     clock = iter([0.0, 10.0, 10.0, 10.0])
 
-    records, _, reached_end = collect_all_pages(
+    records, _, reached_end, _ = collect_all_pages(
         fake_fetch, page_size=100, deadline=5.0, now_fn=lambda: next(clock)
     )
 
@@ -121,7 +160,7 @@ def test_deadline_is_ignored_when_not_set():
         data = [make_record(page_number)] if page_number <= 2 else []
         return {"data": data, "totalCount": 2}
 
-    records, _, reached_end = collect_all_pages(fake_fetch, page_size=100, deadline=None)
+    records, _, reached_end, _ = collect_all_pages(fake_fetch, page_size=100, deadline=None)
 
     assert len(records) == 2
     assert reached_end is True

@@ -12,8 +12,12 @@ data/raw/*.json
 # One per sort direction (checkpoint_current_tenders_<direction>.json).
 !data/raw/checkpoint_current_tenders_*.json
 data/processed/*.csv
-!data/processed/current_tenders.csv
 !data/processed/tender_details.csv
 !data/processed/tender_bids.csv
 !data/processed/tender_detail_failures.csv
 data/processed/*.parquet
+data/processed/*.csv.gz
+# Deduplicated + gzipped (see export_current_tenders_csv.py) to stay under
+# GitHub's 100MB push limit as the archive grows - confirmed 2026-11-18 a
+# plain, full-history current_tenders.csv exceeded it.
+!data/processed/current_tenders.csv.gz
