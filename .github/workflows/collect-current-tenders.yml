@@ -103,5 +103,28 @@ jobs:
             echo "No changes to commit."
           else
             git commit -m "Update current tenders collection progress [skip ci]"
-            git push origin HEAD:${{ github.ref_name }}
+            # A run's own collection step can take hours, during which an
+            # unrelated push (e.g. a code fix pushed directly, outside any
+            # workflow run - not covered by this workflow's own
+            # concurrency group) can move the branch - confirmed
+            # 2026-11-18 (run 44366887743): collection succeeded but the
+            # push was rejected outright ("fetch first"), discarding that
+            # whole run's progress. Rebase onto the moved branch and retry
+            # instead of giving up on the first rejection - this commit
+            # only ever touches data/checkpoint files, so it should never
+            # conflict with a code-only push.
+            pushed=false
+            for attempt in 1 2 3; do
+              if git push origin HEAD:${{ github.ref_name }}; then
+                pushed=true
+                break
+              fi
+              echo "Push rejected (attempt $attempt/3) - rebasing onto the updated branch and retrying..."
+              git fetch origin ${{ github.ref_name }}
+              git rebase "origin/${{ github.ref_name }}"
+            done
+            if [ "$pushed" = false ]; then
+              echo "::error::Failed to push after 3 attempts."
+              exit 1
+            fi
           fi
